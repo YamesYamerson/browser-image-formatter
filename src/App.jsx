@@ -1,5 +1,21 @@
-import { useState, useRef } from 'react'
-import { Upload, Download, Settings, Image, Trash2, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useRef, useCallback } from 'react'
+import { 
+  FaUpload, 
+  FaDownload, 
+  FaCog, 
+  FaImage, 
+  FaTrash, 
+  FaCheckCircle, 
+  FaExclamationTriangle,
+  FaExpand,
+  FaCompress,
+  FaCrop,
+  FaFileImage,
+  FaTimes,
+  FaPlay,
+  FaPause,
+  FaSpinner
+} from 'react-icons/fa'
 
 function App() {
   const [files, setFiles] = useState([])
@@ -11,12 +27,15 @@ function App() {
   const [quality, setQuality] = useState(80)
   const [processedImages, setProcessedImages] = useState([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState(0)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [cropMode, setCropMode] = useState(false)
   const fileInputRef = useRef(null)
 
   const supportedFormats = ['jpg', 'jpeg', 'png', 'svg', 'webp', 'avif']
   const aspectRatios = ['16:9', '4:3', '3:2', '1:1', '3:4', '9:16']
 
-  const handleFileSelect = (event) => {
+  const handleFileSelect = useCallback((event) => {
     const selectedFiles = Array.from(event.target.files)
     const imageFiles = selectedFiles.filter(file => 
       file.type.startsWith('image/') && 
@@ -24,21 +43,46 @@ function App() {
     )
     
     setFiles(prev => [...prev, ...imageFiles])
-  }
+  }, [supportedFormats])
 
-  const removeFile = (index) => {
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    const imageFiles = droppedFiles.filter(file => 
+      file.type.startsWith('image/') && 
+      supportedFormats.some(format => file.name.toLowerCase().endsWith(format))
+    )
+    
+    setFiles(prev => [...prev, ...imageFiles])
+  }, [supportedFormats])
+
+  const removeFile = useCallback((index) => {
     setFiles(prev => prev.filter((_, i) => i !== index))
-  }
+  }, [])
 
-  const clearAllFiles = () => {
+  const clearAllFiles = useCallback(() => {
     setFiles([])
     setProcessedImages([])
-  }
+    setProcessingProgress(0)
+  }, [])
 
   const processImages = async () => {
     if (files.length === 0) return
 
     setIsProcessing(true)
+    setProcessingProgress(0)
     const processed = []
 
     for (let i = 0; i < files.length; i++) {
@@ -50,12 +94,14 @@ function App() {
           processed: processedImage,
           status: 'success'
         })
+        setProcessingProgress(((i + 1) / files.length) * 100)
       } catch (error) {
         processed.push({
           original: file,
           error: error.message,
           status: 'error'
         })
+        setProcessingProgress(((i + 1) / files.length) * 100)
       }
     }
 
@@ -72,6 +118,10 @@ function App() {
       img.onload = () => {
         let newWidth = img.width
         let newHeight = img.height
+        let sourceX = 0
+        let sourceY = 0
+        let sourceWidth = img.width
+        let sourceHeight = img.height
 
         // Calculate new dimensions based on resize mode
         if (resizeMode === 'specific') {
@@ -85,23 +135,44 @@ function App() {
           newWidth = (img.width * newHeight) / img.height
         } else if (resizeMode === 'aspect') {
           const [ratioW, ratioH] = aspectRatio.split(':').map(Number)
-          const imgRatio = img.width / img.height
           const targetRatio = ratioW / ratioH
-
-          if (imgRatio > targetRatio) {
-            newWidth = img.height * targetRatio
-            newHeight = img.height
+          
+          if (cropMode) {
+            // Crop to fit aspect ratio
+            const imgRatio = img.width / img.height
+            if (imgRatio > targetRatio) {
+              // Image is wider than target ratio, crop width
+              sourceWidth = img.height * targetRatio
+              sourceX = (img.width - sourceWidth) / 2
+            } else {
+              // Image is taller than target ratio, crop height
+              sourceHeight = img.width / targetRatio
+              sourceY = (img.height - sourceHeight) / 2
+            }
+            newWidth = parseInt(width) || sourceWidth
+            newHeight = parseInt(height) || sourceHeight
           } else {
-            newWidth = img.width
-            newHeight = img.width / targetRatio
+            // Fit within aspect ratio (letterbox/pillarbox)
+            const imgRatio = img.width / img.height
+            if (imgRatio > targetRatio) {
+              newWidth = img.height * targetRatio
+              newHeight = img.height
+            } else {
+              newWidth = img.width
+              newHeight = img.width / targetRatio
+            }
           }
         }
 
         canvas.width = newWidth
         canvas.height = newHeight
 
+        // Fill with white background for transparent images
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, newWidth, newHeight)
+
         // Draw the image with new dimensions
-        ctx.drawImage(img, 0, 0, newWidth, newHeight)
+        ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, newWidth, newHeight)
 
         // Convert to desired format
         let mimeType
@@ -168,95 +239,80 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Batch Image Processor
-          </h1>
-          <p className="text-gray-600">
-            Convert and resize multiple images with ease
-          </p>
+    <div className="min-h-screen h-screen flex flex-col">
+      {/* Header */}
+      <header className="glass-effect border-b border-white/20">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl">
+                <FaImage className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  Batch Image Processor
+                </h1>
+                <p className="text-sm text-gray-600">Convert and resize multiple images with ease</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <FaCog className="w-5 h-5 text-gray-500" />
+              <span className="text-sm text-gray-600">v1.0</span>
+            </div>
+          </div>
         </div>
+      </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Settings Panel */}
-          <div className="lg:col-span-1">
-            <div className="card">
-              <div className="flex items-center mb-4">
-                <Settings className="w-5 h-5 mr-2 text-blue-600" />
-                <h2 className="text-xl font-semibold">Settings</h2>
-              </div>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-row items-stretch justify-center min-h-0 p-2 lg:p-6 gap-4">
+        {/* Settings Panel */}
+        <aside className="w-full max-w-xs flex-shrink-0 flex flex-col">
+          <div className="card h-full flex flex-col border border-gray-200 shadow-sm p-4 lg:p-6">
+            <div className="flex items-center mb-6">
+              <FaCog className="w-5 h-5 mr-3 text-blue-600" />
+              <h2 className="text-xl font-semibold">Settings</h2>
+            </div>
 
-              {/* Output Format */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Output Format
-                </label>
-                <select 
-                  value={outputFormat} 
-                  onChange={(e) => setOutputFormat(e.target.value)}
-                  className="input-field"
-                >
-                  {supportedFormats.map(format => (
-                    <option key={format} value={format}>
-                      {format.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Output Format */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Output Format
+              </label>
+              <select 
+                value={outputFormat} 
+                onChange={(e) => setOutputFormat(e.target.value)}
+                className="select-field"
+              >
+                {supportedFormats.map(format => (
+                  <option key={format} value={format}>
+                    {format.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              {/* Resize Mode */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Resize Mode
-                </label>
-                <select 
-                  value={resizeMode} 
-                  onChange={(e) => setResizeMode(e.target.value)}
-                  className="input-field"
-                >
-                  <option value="none">No Resize</option>
-                  <option value="specific">Specific Size</option>
-                  <option value="width">Width Only</option>
-                  <option value="height">Height Only</option>
-                  <option value="aspect">Aspect Ratio</option>
-                </select>
-              </div>
+            {/* Resize Mode */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Resize Mode
+              </label>
+              <select 
+                value={resizeMode} 
+                onChange={(e) => setResizeMode(e.target.value)}
+                className="select-field"
+              >
+                <option value="none">No Resize</option>
+                <option value="specific">Specific Size</option>
+                <option value="width">Width Only</option>
+                <option value="height">Height Only</option>
+                <option value="aspect">Aspect Ratio</option>
+              </select>
+            </div>
 
-              {/* Width and Height */}
-              {resizeMode === 'specific' && (
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Width
-                    </label>
-                    <input
-                      type="number"
-                      value={width}
-                      onChange={(e) => setWidth(e.target.value)}
-                      placeholder="Width"
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Height
-                    </label>
-                    <input
-                      type="number"
-                      value={height}
-                      onChange={(e) => setHeight(e.target.value)}
-                      placeholder="Height"
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Width Only */}
-              {resizeMode === 'width' && (
-                <div className="mb-4">
+            {/* Width and Height */}
+            {resizeMode === 'specific' && (
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Width
                   </label>
@@ -268,11 +324,7 @@ function App() {
                     className="input-field"
                   />
                 </div>
-              )}
-
-              {/* Height Only */}
-              {resizeMode === 'height' && (
-                <div className="mb-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Height
                   </label>
@@ -284,18 +336,52 @@ function App() {
                     className="input-field"
                   />
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Aspect Ratio */}
-              {resizeMode === 'aspect' && (
-                <div className="mb-4">
+            {/* Width Only */}
+            {resizeMode === 'width' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Width
+                </label>
+                <input
+                  type="number"
+                  value={width}
+                  onChange={(e) => setWidth(e.target.value)}
+                  placeholder="Width"
+                  className="input-field"
+                />
+              </div>
+            )}
+
+            {/* Height Only */}
+            {resizeMode === 'height' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Height
+                </label>
+                <input
+                  type="number"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="Height"
+                  className="input-field"
+                />
+              </div>
+            )}
+
+            {/* Aspect Ratio */}
+            {resizeMode === 'aspect' && (
+              <div className="space-y-4 mb-6">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Aspect Ratio
                   </label>
                   <select 
                     value={aspectRatio} 
                     onChange={(e) => setAspectRatio(e.target.value)}
-                    className="input-field"
+                    className="select-field"
                   >
                     {aspectRatios.map(ratio => (
                       <option key={ratio} value={ratio}>
@@ -304,54 +390,120 @@ function App() {
                     ))}
                   </select>
                 </div>
-              )}
-
-              {/* Quality */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quality: {quality}%
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={quality}
-                  onChange={(e) => setQuality(parseInt(e.target.value))}
-                  className="w-full"
-                />
+                
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setCropMode(false)}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      !cropMode 
+                        ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                        : 'bg-gray-100 text-gray-600 border border-gray-300'
+                    }`}
+                  >
+                    <FaExpand className="w-4 h-4 mr-1 inline" />
+                    Fit
+                  </button>
+                  <button
+                    onClick={() => setCropMode(true)}
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      cropMode 
+                        ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                        : 'bg-gray-100 text-gray-600 border border-gray-300'
+                    }`}
+                  >
+                    <FaCrop className="w-4 h-4 mr-1 inline" />
+                    Crop
+                  </button>
+                </div>
+                
+                <div className="text-xs text-gray-500">
+                  {cropMode 
+                    ? "Crop images to fit the exact aspect ratio" 
+                    : "Fit images within the aspect ratio (may add letterboxing)"
+                  }
+                </div>
               </div>
+            )}
 
-              {/* Process Button */}
-              <button
-                onClick={processImages}
-                disabled={files.length === 0 || isProcessing}
-                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isProcessing ? 'Processing...' : 'Process Images'}
-              </button>
+            {/* Quality */}
+            <div className="mb-8">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quality: {quality}%
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="100"
+                value={quality}
+                onChange={(e) => setQuality(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+              />
             </div>
-          </div>
 
-          {/* File Upload and Results */}
-          <div className="lg:col-span-2 space-y-6">
+            {/* Process Button */}
+            <button
+              onClick={processImages}
+              disabled={files.length === 0 || isProcessing}
+              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {isProcessing ? (
+                <>
+                  <FaSpinner className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <FaPlay className="w-4 h-4 mr-2" />
+                  Process Images
+                </>
+              )}
+            </button>
+
+            {/* Progress Bar */}
+            {isProcessing && (
+              <div className="mt-4">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ width: `${processingProgress}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-600 mt-2 text-center">
+                  {Math.round(processingProgress)}% Complete
+                </p>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <section className="flex-1 flex flex-col">
+          <div className="card h-full flex flex-col border border-gray-200 shadow-sm p-4 lg:p-8">
             {/* File Upload */}
             <div className="card">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
-                  <Upload className="w-5 h-5 mr-2 text-blue-600" />
+                  <FaUpload className="w-5 h-5 mr-3 text-blue-600" />
                   <h2 className="text-xl font-semibold">Upload Images</h2>
                 </div>
                 {files.length > 0 && (
                   <button
                     onClick={clearAllFiles}
-                    className="btn-secondary text-sm"
+                    className="btn-danger text-sm flex items-center"
                   >
+                    <FaTrash className="w-4 h-4 mr-1" />
                     Clear All
                   </button>
                 )}
               </div>
 
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <div 
+                className={`file-drop-zone ${isDragOver ? 'dragover' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -360,32 +512,38 @@ function App() {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="btn-primary mb-4"
-                >
-                  Select Images
-                </button>
-                <p className="text-gray-600">
+                <FaFileImage className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-semibold mb-2">Drop images here or click to browse</h3>
+                <p className="text-gray-600 mb-4">
                   Supported formats: {supportedFormats.join(', ').toUpperCase()}
                 </p>
+                <button className="btn-primary">
+                  <FaUpload className="w-4 h-4 mr-2" />
+                  Select Images
+                </button>
               </div>
 
               {files.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="font-medium mb-2">Selected Files ({files.length})</h3>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                <div className="mt-6">
+                  <h3 className="font-semibold mb-4 flex items-center">
+                    <FaImage className="w-4 h-4 mr-2 text-blue-600" />
+                    Selected Files ({files.length})
+                  </h3>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
                     {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center">
-                          <Image className="w-4 h-4 mr-2 text-gray-500" />
-                          <span className="text-sm">{file.name}</span>
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                        <div className="flex items-center flex-1 min-w-0">
+                          <FaFileImage className="w-4 h-4 mr-3 text-gray-500 flex-shrink-0" />
+                          <span className="text-sm truncate">{file.name}</span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
                         </div>
                         <button
                           onClick={() => removeFile(index)}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50 transition-colors"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <FaTimes className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
@@ -397,32 +555,33 @@ function App() {
             {/* Results */}
             {processedImages.length > 0 && (
               <div className="card">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center">
-                    <Download className="w-5 h-5 mr-2 text-green-600" />
+                    <FaDownload className="w-5 h-5 mr-3 text-green-600" />
                     <h2 className="text-xl font-semibold">Processed Images</h2>
                   </div>
                   <button
                     onClick={downloadAll}
-                    className="btn-primary"
+                    className="btn-primary flex items-center"
                   >
+                    <FaDownload className="w-4 h-4 mr-2" />
                     Download All
                   </button>
                 </div>
 
                 <div className="space-y-3">
                   {processedImages.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                      <div className="flex items-center">
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center flex-1 min-w-0">
                         {item.status === 'success' ? (
-                          <CheckCircle className="w-5 h-5 mr-2 text-green-500" />
+                          <FaCheckCircle className="w-5 h-5 mr-3 text-green-500 flex-shrink-0" />
                         ) : (
-                          <AlertCircle className="w-5 h-5 mr-2 text-red-500" />
+                          <FaExclamationTriangle className="w-5 h-5 mr-3 text-red-500 flex-shrink-0" />
                         )}
-                        <div>
-                          <p className="font-medium">{item.original.name}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.original.name}</p>
                           {item.status === 'success' && (
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 truncate">
                               → {item.processed.name}
                             </p>
                           )}
@@ -436,8 +595,9 @@ function App() {
                       {item.status === 'success' && (
                         <button
                           onClick={() => downloadSingle(item.processed)}
-                          className="btn-secondary text-sm"
+                          className="btn-secondary text-sm flex items-center ml-4"
                         >
+                          <FaDownload className="w-4 h-4 mr-1" />
                           Download
                         </button>
                       )}
@@ -447,8 +607,8 @@ function App() {
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
