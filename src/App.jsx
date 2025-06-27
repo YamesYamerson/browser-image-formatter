@@ -477,28 +477,27 @@ function App() {
         </aside>
 
         {/* Main Content Area */}
-        <section className="flex-1 flex flex-col">
-          <div className="card h-full flex flex-col border border-gray-200 shadow-sm p-4 lg:p-8">
-            {/* File Upload */}
-            <div className="card">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <FaUpload className="w-5 h-5 mr-3 text-blue-600" />
-                  <h2 className="text-xl font-semibold">Upload Images</h2>
-                </div>
-                {files.length > 0 && (
-                  <button
-                    onClick={clearAllFiles}
-                    className="btn-danger text-sm flex items-center"
-                  >
-                    <FaTrash className="w-4 h-4 mr-1" />
-                    Clear All
-                  </button>
-                )}
-              </div>
-
+        <section className="flex-1 h-full flex flex-col">
+          <div className="card flex-1 h-full flex flex-col border border-gray-200 shadow-sm p-4 lg:p-8">
+            {/* Heading at the top left */}
+            <div className="flex items-center mb-6">
+              <FaUpload className="w-5 h-5 mr-3 text-blue-600" />
+              <h2 className="text-xl font-semibold">Upload Images</h2>
+              <div className="flex-1" />
+              {files.length > 0 && (
+                <button
+                  onClick={clearAllFiles}
+                  className="btn-danger text-sm flex items-center"
+                >
+                  <FaTrash className="w-4 h-4 mr-1" />
+                  Clear All
+                </button>
+              )}
+            </div>
+            {/* Drop zone fills remaining space */}
+            <div className="flex-1 flex flex-col">
               <div 
-                className={`file-drop-zone ${isDragOver ? 'dragover' : ''}`}
+                className={`file-drop-zone flex-1 flex flex-col items-center justify-center min-h-[340px] w-full max-w-2xl mx-auto py-12`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -517,12 +516,11 @@ function App() {
                 <p className="text-gray-600 mb-4">
                   Supported formats: {supportedFormats.join(', ').toUpperCase()}
                 </p>
-                <button className="btn-primary">
-                  <FaUpload className="w-4 h-4 mr-2" />
-                  Select Images
+                <button className="btn-primary px-6 py-3 flex items-center gap-2">
+                  <FaUpload className="w-4 h-4" />
+                  <span>Select Images</span>
                 </button>
               </div>
-
               {files.length > 0 && (
                 <div className="mt-6">
                   <h3 className="font-semibold mb-4 flex items-center">
