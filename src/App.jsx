@@ -14,7 +14,8 @@ import {
   FaTimes,
   FaPlay,
   FaPause,
-  FaSpinner
+  FaSpinner,
+  FaPlus
 } from 'react-icons/fa'
 
 function App() {
@@ -496,55 +497,69 @@ function App() {
             </div>
             {/* Drop zone fills remaining space */}
             <div className="flex-1 flex flex-col">
-              <div 
-                className={`file-drop-zone flex-1 flex flex-col items-center justify-center min-h-[340px] w-full max-w-2xl mx-auto py-12`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <FaFileImage className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                <h3 className="text-lg font-semibold mb-2">Drop images here or click to browse</h3>
-                <p className="text-gray-600 mb-4">
-                  Supported formats: {supportedFormats.join(', ').toUpperCase()}
-                </p>
-                <button className="btn-primary px-6 py-3 flex items-center gap-2">
-                  <FaUpload className="w-4 h-4" />
-                  <span>Select Images</span>
-                </button>
-              </div>
-              {files.length > 0 && (
-                <div className="mt-6">
+              {files.length === 0 ? (
+                <div 
+                  className={`file-drop-zone flex-1 flex flex-col items-center justify-center min-h-[340px] w-full max-w-2xl mx-auto py-12`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <FaFileImage className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-lg font-semibold mb-2">Drop images here or click to browse</h3>
+                  <p className="text-gray-600 mb-4">
+                    Supported formats: {supportedFormats.join(', ').toUpperCase()}
+                  </p>
+                  <button className="btn-primary px-6 py-3 flex items-center gap-2">
+                    <FaUpload className="w-4 h-4" />
+                    <span>Select Images</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full h-full flex-1 flex flex-col">
                   <h3 className="font-semibold mb-4 flex items-center">
                     <FaImage className="w-4 h-4 mr-2 text-blue-600" />
                     Selected Files ({files.length})
                   </h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {files.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                        <div className="flex items-center flex-1 min-w-0">
-                          <FaFileImage className="w-4 h-4 mr-3 text-gray-500 flex-shrink-0" />
-                          <span className="text-sm truncate">{file.name}</span>
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                          </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 flex-1 overflow-y-auto">
+                    {files.map((file, index) => {
+                      const url = URL.createObjectURL(file)
+                      return (
+                        <div key={index} className="relative group bg-gray-100 rounded-xl overflow-hidden shadow border border-gray-200 flex flex-col items-center justify-center aspect-square">
+                          <img src={url} alt={file.name} className="object-cover w-full h-full" />
+                          <button
+                            onClick={e => { e.stopPropagation(); removeFile(index); }}
+                            className="absolute top-2 right-2 bg-white/80 hover:bg-red-500 hover:text-white text-gray-700 rounded-full p-1 shadow transition-all z-10"
+                            title="Remove"
+                          >
+                            <FaTimes className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50 transition-colors"
-                        >
-                          <FaTimes className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                      )
+                    })}
+                    {/* Add More Card */}
+                    <div className="relative group bg-white border-2 border-dashed border-blue-300 rounded-xl flex flex-col items-center justify-center aspect-square cursor-pointer hover:bg-blue-50 transition-all"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <FaPlus className="w-8 h-8 text-blue-400 mb-2" />
+                      <span className="text-blue-600 font-medium">Add More</span>
+                    </div>
                   </div>
                 </div>
               )}
